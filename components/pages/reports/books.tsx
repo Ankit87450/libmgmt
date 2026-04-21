@@ -3,7 +3,7 @@ import { PageTitle } from "@/components/page-title";
 import { ModuleNav } from "@/components/module-nav";
 import { reportsNav } from "@/lib/nav";
 import { useRoleBase } from "@/lib/role";
-import { useAppSelector } from "@/lib/hooks";
+import { useItemsQuery } from "@/features/api";
 import {
   Table,
   TableBody,
@@ -15,10 +15,11 @@ import {
 import { Card, CardContent } from "@/components/ui/card";
 
 export function BooksReport({ kind }: { kind: "book" | "movie" }) {
-  const { role, base } = useRoleBase();
-  const items = useAppSelector((s) =>
-    s.catalog.items.filter((i) => i.kind === kind),
-  );
+  const ctx = useRoleBase();
+  const { data, isLoading } = useItemsQuery();
+  const items = (data?.items ?? []).filter((i) => i.kind === kind);
+  if (ctx.loading || !ctx.role) return null;
+  const { role, base } = ctx;
   return (
     <>
       <PageTitle
@@ -33,7 +34,7 @@ export function BooksReport({ kind }: { kind: "book" | "movie" }) {
               <TableRow>
                 <TableHead>Serial No</TableHead>
                 <TableHead>Name of {kind === "book" ? "Book" : "Movie"}</TableHead>
-                <TableHead>Author Name</TableHead>
+                <TableHead>{kind === "book" ? "Author" : "Director"}</TableHead>
                 <TableHead>Category</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead className="text-right">Cost (₹)</TableHead>
@@ -41,7 +42,13 @@ export function BooksReport({ kind }: { kind: "book" | "movie" }) {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {items.length === 0 ? (
+              {isLoading ? (
+                <TableRow>
+                  <TableCell colSpan={7} className="text-center text-muted-foreground">
+                    Loading…
+                  </TableCell>
+                </TableRow>
+              ) : items.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={7} className="text-center text-muted-foreground">
                     No {kind === "book" ? "books" : "movies"} on record.

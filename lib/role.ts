@@ -1,9 +1,20 @@
 "use client";
-import { useAppSelector } from "@/lib/hooks";
-import type { Role } from "@/features/auth/authSlice";
+import { useMeQuery } from "@/features/api";
 
-export function useRoleBase(): { role: Role; base: string } {
-  const auth = useAppSelector((s) => s.auth);
-  const role: Role = auth.role ?? "user";
-  return { role, base: role === "admin" ? "/admin" : "/user" };
+export type RoleCtx =
+  | { loading: true; role: null; base: null; username: null }
+  | { loading: false; role: "admin" | "user"; base: string; username: string }
+  | { loading: false; role: null; base: null; username: null };
+
+export function useRoleBase(): RoleCtx {
+  const { data, isLoading } = useMeQuery();
+  if (isLoading) return { loading: true, role: null, base: null, username: null };
+  const u = data?.user;
+  if (!u) return { loading: false, role: null, base: null, username: null };
+  return {
+    loading: false,
+    role: u.role,
+    username: u.username,
+    base: u.role === "admin" ? "/admin" : "/user",
+  };
 }

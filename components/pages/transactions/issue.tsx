@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useMemo } from "react";
+import { Suspense, useEffect, useMemo } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -8,7 +8,11 @@ import { PageTitle } from "@/components/page-title";
 import { ModuleNav } from "@/components/module-nav";
 import { transactionsNav } from "@/lib/nav";
 import { useRoleBase } from "@/lib/role";
-import { useAppDispatch, useAppSelector } from "@/lib/hooks";
+import {
+  useItemsQuery,
+  useMembersQuery,
+  useIssueBookMutation,
+} from "@/features/api";
 import {
   Form,
   FormControl,
@@ -27,22 +31,22 @@ import {
 } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { DatePicker } from "@/components/date-picker";
 import { issueSchema, type IssueValues } from "@/schemas/issue";
-import { issueBook } from "@/features/transactions/transactionsSlice";
-import { updateItemStatus } from "@/features/catalog/catalogSlice";
 
 const todayISO = () => format(startOfDay(new Date()), "yyyy-MM-dd");
 
-export function IssuePage() {
+function IssueFormInner() {
   const router = useRouter();
   const params = useSearchParams();
-  const { role, base } = useRoleBase();
-  const items = useAppSelector((s) => s.catalog.items);
-  const members = useAppSelector((s) => s.members.members);
-  const dispatch = useAppDispatch();
+  const roleCtx = useRoleBase();
+  const { data: itemsData } = useItemsQuery();
+  const { data: membersData } = useMembersQuery();
+  const [issueBook, { isLoading }] = useIssueBookMutation();
 
+  const items = itemsData?.items ?? [];
+  const members = membersData?.members ?? [];
   const available = useMemo(
     () => items.filter((i) => i.status === "Available"),
     [items],
@@ -91,20 +95,24 @@ export function IssuePage() {
     }
   }, [watchIssue, form]);
 
-  const onSubmit = (v: IssueValues) => {
-    dispatch(
-      issueBook({
-        itemId: v.serialNo,
-        serialNo: v.serialNo,
-        memberId: v.memberId,
-        issueDate: v.issueDate,
-        returnDueDate: v.returnDate,
-        remarks: v.remarks,
-      }),
-    );
-    dispatch(
-      updateItemStatus({ serialNo: v.serialNo, status: "Unavailable" }),
-    );
+  if (roleCtx.loading || !roleCtx.role) return null;
+  const { role, base } = roleCtx;
+
+  const onSubmit = async (v: IssueValues) => {
+    const res = await issueBook({
+      serialNo: v.serialNo,
+      memberId: v.memberId,
+      issueDate: v.issueDate,
+      returnDueDate: v.returnDate,
+      remarks: v.remarks,
+    });
+    if ("error" in res) {
+      const data = (res.error as { data?: { error?: string } }).data;
+      form.setError("serialNo", {
+        message: data?.error ?? "Could not issue book",
+      });
+      return;
+    }
     router.push(`${base}/success?action=issue`);
   };
 
@@ -125,10 +133,7 @@ export function IssuePage() {
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Enter Book Name</FormLabel>
-                    <Select
-                      onValueChange={field.onChange}
-                      value={field.value}
-                    >
+                    <Select onValueChange={field.onChange} value={field.value}>
                       <FormControl>
                         <SelectTrigger>
                           <SelectValue placeholder="Select an available title" />
@@ -165,10 +170,7 @@ export function IssuePage() {
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Member</FormLabel>
-                    <Select
-                      onValueChange={field.onChange}
-                      value={field.value}
-                    >
+                    <Select onValueChange={field.onChange} value={field.value}>
                       <FormControl>
                         <SelectTrigger>
                           <SelectValue placeholder="Pick member" />
@@ -246,12 +248,22 @@ export function IssuePage() {
                 >
                   Cancel
                 </Button>
-                <Button type="submit">Confirm</Button>
+                <Button type="submit" disabled={isLoading}>
+                  {isLoading ? "Saving…" : "Confirm"}
+                </Button>
               </div>
             </form>
           </Form>
         </CardContent>
       </Card>
     </>
+  );
+}
+
+export function IssuePage() {
+  return (
+    <Suspense fallback={null}>
+      <IssueFormInner />
+    </Suspense>
   );
 }

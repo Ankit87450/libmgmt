@@ -3,7 +3,7 @@ import { PageTitle } from "@/components/page-title";
 import { ModuleNav } from "@/components/module-nav";
 import { reportsNav } from "@/lib/nav";
 import { useRoleBase } from "@/lib/role";
-import { useAppSelector } from "@/lib/hooks";
+import { useItemsQuery, useIssuesQuery } from "@/features/api";
 import {
   Table,
   TableBody,
@@ -15,11 +15,13 @@ import {
 import { Card, CardContent } from "@/components/ui/card";
 
 export function ActiveIssuesReport() {
-  const { role, base } = useRoleBase();
-  const issues = useAppSelector((s) =>
-    s.transactions.issues.filter((i) => i.status === "Active"),
-  );
-  const items = useAppSelector((s) => s.catalog.items);
+  const ctx = useRoleBase();
+  const { data: issuesData } = useIssuesQuery();
+  const { data: itemsData } = useItemsQuery();
+  const issues = (issuesData?.issues ?? []).filter((i) => i.status === "Active");
+  const items = itemsData?.items ?? [];
+  if (ctx.loading || !ctx.role) return null;
+  const { role, base } = ctx;
   return (
     <>
       <PageTitle title="Active Issues" backHref={`${base}/reports`} />

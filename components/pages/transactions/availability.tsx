@@ -7,7 +7,7 @@ import { PageTitle } from "@/components/page-title";
 import { ModuleNav } from "@/components/module-nav";
 import { transactionsNav } from "@/lib/nav";
 import { useRoleBase } from "@/lib/role";
-import { useAppSelector } from "@/lib/hooks";
+import { useItemsQuery } from "@/features/api";
 import { CATEGORIES, type Item } from "@/lib/types";
 import {
   Form,
@@ -43,8 +43,9 @@ import {
 
 export function AvailabilityPage() {
   const router = useRouter();
-  const { role, base } = useRoleBase();
-  const items = useAppSelector((s) => s.catalog.items);
+  const roleCtx = useRoleBase();
+  const { data } = useItemsQuery();
+  const items = data?.items ?? [];
   const [results, setResults] = useState<Item[] | null>(null);
   const [selectedSerial, setSelectedSerial] = useState<string | null>(null);
 
@@ -57,6 +58,9 @@ export function AvailabilityPage() {
       categoryMovie: "",
     },
   });
+
+  if (roleCtx.loading || !roleCtx.role) return null;
+  const { role, base } = roleCtx;
 
   const onSubmit = (v: AvailabilityValues) => {
     const filters = {
@@ -94,10 +98,7 @@ export function AvailabilityPage() {
 
   return (
     <>
-      <PageTitle
-        title="Book Availability"
-        backHref={`${base}/transactions`}
-      />
+      <PageTitle title="Book Availability" backHref={`${base}/transactions`} />
       <ModuleNav items={transactionsNav(role)} />
       <Card>
         <CardHeader>
@@ -141,10 +142,7 @@ export function AvailabilityPage() {
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Book Category</FormLabel>
-                    <Select
-                      onValueChange={field.onChange}
-                      value={field.value}
-                    >
+                    <Select onValueChange={field.onChange} value={field.value}>
                       <FormControl>
                         <SelectTrigger>
                           <SelectValue placeholder="Pick a category" />
@@ -168,10 +166,7 @@ export function AvailabilityPage() {
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Movie Category</FormLabel>
-                    <Select
-                      onValueChange={field.onChange}
-                      value={field.value}
-                    >
+                    <Select onValueChange={field.onChange} value={field.value}>
                       <FormControl>
                         <SelectTrigger>
                           <SelectValue placeholder="Pick a category" />
@@ -242,9 +237,7 @@ export function AvailabilityPage() {
                       const available = r.status === "Available";
                       return (
                         <TableRow key={r.serialNo}>
-                          <TableCell className="capitalize">
-                            {r.kind}
-                          </TableCell>
+                          <TableCell className="capitalize">{r.kind}</TableCell>
                           <TableCell>{r.name}</TableCell>
                           <TableCell>{r.author}</TableCell>
                           <TableCell>{r.serialNo}</TableCell>

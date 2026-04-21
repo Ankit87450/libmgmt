@@ -3,7 +3,7 @@ import { PageTitle } from "@/components/page-title";
 import { ModuleNav } from "@/components/module-nav";
 import { reportsNav } from "@/lib/nav";
 import { useRoleBase } from "@/lib/role";
-import { useAppSelector } from "@/lib/hooks";
+import { useMembersQuery } from "@/features/api";
 import {
   Table,
   TableBody,
@@ -15,8 +15,11 @@ import {
 import { Card, CardContent } from "@/components/ui/card";
 
 export function MembershipsReport() {
-  const { role, base } = useRoleBase();
-  const members = useAppSelector((s) => s.members.members);
+  const ctx = useRoleBase();
+  const { data, isLoading } = useMembersQuery();
+  const members = data?.members ?? [];
+  if (ctx.loading || !ctx.role) return null;
+  const { role, base } = ctx;
   return (
     <>
       <PageTitle
@@ -41,7 +44,13 @@ export function MembershipsReport() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {members.length === 0 ? (
+              {isLoading ? (
+                <TableRow>
+                  <TableCell colSpan={9} className="text-center text-muted-foreground">
+                    Loading…
+                  </TableCell>
+                </TableRow>
+              ) : members.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={9} className="text-center text-muted-foreground">
                     No members on record.

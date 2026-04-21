@@ -1,29 +1,30 @@
 "use client";
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { useAppSelector } from "@/lib/hooks";
-import type { Role } from "@/features/auth/authSlice";
+import { useMeQuery } from "@/features/api";
 
 export function RequireRole({
   role,
   children,
 }: {
-  role: Role;
+  role: "admin" | "user";
   children: React.ReactNode;
 }) {
   const router = useRouter();
-  const auth = useAppSelector((s) => s.auth);
+  const { data, isLoading } = useMeQuery();
+  const currentRole = data?.user?.role ?? null;
 
   useEffect(() => {
-    if (auth.role !== role) {
+    if (isLoading) return;
+    if (currentRole !== role) {
       router.replace("/login");
     }
-  }, [auth.role, role, router]);
+  }, [isLoading, currentRole, role, router]);
 
-  if (auth.role !== role) {
+  if (isLoading || currentRole !== role) {
     return (
       <div className="flex min-h-[40vh] items-center justify-center text-sm text-muted-foreground">
-        Redirecting to login…
+        Checking session…
       </div>
     );
   }

@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useMemo } from "react";
+import { Suspense, useEffect, useMemo } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -7,7 +7,11 @@ import { PageTitle } from "@/components/page-title";
 import { ModuleNav } from "@/components/module-nav";
 import { transactionsNav } from "@/lib/nav";
 import { useRoleBase } from "@/lib/role";
-import { useAppDispatch, useAppSelector } from "@/lib/hooks";
+import {
+  useIssuesQuery,
+  useItemsQuery,
+  useCompleteReturnMutation,
+} from "@/features/api";
 import {
   Form,
   FormControl,
@@ -29,18 +33,17 @@ import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { fineSchema, type FineValues } from "@/schemas/fine";
-import { completeReturn } from "@/features/transactions/transactionsSlice";
-import { updateItemStatus } from "@/features/catalog/catalogSlice";
-import { setFinePending } from "@/features/members/membersSlice";
 
-export function PayFinePage() {
+function PayFineInner() {
   const router = useRouter();
   const params = useSearchParams();
-  const { role, base } = useRoleBase();
-  const dispatch = useAppDispatch();
-  const issues = useAppSelector((s) => s.transactions.issues);
-  const items = useAppSelector((s) => s.catalog.items);
+  const roleCtx = useRoleBase();
+  const { data: issuesData } = useIssuesQuery();
+  const { data: itemsData } = useItemsQuery();
+  const [completeReturn, { isLoading }] = useCompleteReturnMutation();
 
+  const issues = issuesData?.issues ?? [];
+  const items = itemsData?.items ?? [];
   const returnedPending = useMemo(
     () =>
       issues.filter((i) => i.actualReturnDate && i.status === "Active"),
@@ -72,16 +75,18 @@ export function PayFinePage() {
     form.setValue("fineCalculated", issue?.fineCalculated ?? 0);
   }, [issue, form]);
 
-  const onSubmit = (v: FineValues) => {
+  if (roleCtx.loading || !roleCtx.role) return null;
+  const { role, base } = roleCtx;
+
+  const onSubmit = async (v: FineValues) => {
     if (!issue) return;
-    dispatch(completeReturn({ id: issue.id, finePaid: v.finePaid }));
-    dispatch(
-      updateItemStatus({ serialNo: issue.serialNo, status: "Available" }),
-    );
-    if (v.fineCalculated > 0 && !v.finePaid) {
-      dispatch(
-        setFinePending({ id: issue.memberId, amount: v.fineCalculated }),
-      );
+    const res = await completeReturn({ id: issue.id, finePaid: v.finePaid });
+    if ("error" in res) {
+      const data = (res.error as { data?: { error?: string } }).data;
+      form.setError("finePaid", {
+        message: data?.error ?? "Could not complete return",
+      });
+      return;
     }
     router.push(`${base}/success?action=return`);
   };
@@ -103,10 +108,7 @@ export function PayFinePage() {
                 render={({ field }) => (
                   <FormItem className="md:col-span-2">
                     <FormLabel>Pending Return</FormLabel>
-                    <Select
-                      onValueChange={field.onChange}
-                      value={field.value}
-                    >
+                    <Select onValueChange={field.onChange} value={field.value}>
                       <FormControl>
                         <SelectTrigger>
                           <SelectValue placeholder="Pick an issue awaiting fine settlement" />
@@ -218,8 +220,8 @@ export function PayFinePage() {
                 >
                   Cancel
                 </Button>
-                <Button type="submit" disabled={!issue}>
-                  Confirm
+                <Button type="submit" disabled={!issue || isLoading}>
+                  {isLoading ? "Saving…" : "Confirm"}
                 </Button>
               </div>
             </form>
@@ -227,5 +229,13 @@ export function PayFinePage() {
         </CardContent>
       </Card>
     </>
+  );
+}
+
+export function PayFinePage() {
+  return (
+    <Suspense fallback={null}>
+      <PayFineInner />
+    </Suspense>
   );
 }

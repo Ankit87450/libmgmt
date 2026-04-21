@@ -2,18 +2,18 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { BookOpen, LogOut, Home, Network } from "lucide-react";
-import { useAppDispatch, useAppSelector } from "@/lib/hooks";
-import { logout } from "@/features/auth/authSlice";
 import { Button } from "@/components/ui/button";
+import { useLogoutMutation, useMeQuery } from "@/features/api";
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const router = useRouter();
-  const dispatch = useAppDispatch();
-  const auth = useAppSelector((s) => s.auth);
-  const homeHref = auth.role === "admin" ? "/admin/home" : "/user/home";
+  const { data } = useMeQuery();
+  const user = data?.user;
+  const homeHref = user?.role === "admin" ? "/admin/home" : "/user/home";
+  const [logout, { isLoading: loggingOut }] = useLogoutMutation();
 
-  const handleLogout = () => {
-    dispatch(logout());
+  const handleLogout = async () => {
+    await logout().unwrap().catch(() => undefined);
     router.push("/login/logout");
   };
 
@@ -41,24 +41,29 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 <Home className="mr-1 h-4 w-4" /> Home
               </Link>
             </Button>
-            <Button variant="outline" size="sm" onClick={handleLogout}>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleLogout}
+              disabled={loggingOut}
+            >
               <LogOut className="mr-1 h-4 w-4" /> Log Out
             </Button>
           </nav>
         </div>
       </header>
       <main className="mx-auto w-full max-w-7xl flex-1 px-4 py-6">
-        {auth.username ? (
+        {user ? (
           <p className="mb-3 text-xs text-muted-foreground">
             Signed in as{" "}
-            <span className="font-medium text-slate-700">{auth.username}</span>{" "}
-            ({auth.role})
+            <span className="font-medium text-slate-700">{user.username}</span>{" "}
+            ({user.role})
           </p>
         ) : null}
         {children}
       </main>
       <footer className="border-t bg-white py-3 text-center text-xs text-muted-foreground">
-        Demo app · Redux Toolkit · React Hook Form · shadcn/ui
+        Demo · Next.js · Redux Toolkit (RTK Query) · React Hook Form · shadcn/ui
       </footer>
     </div>
   );

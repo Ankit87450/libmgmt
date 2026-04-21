@@ -3,7 +3,7 @@ import { PageTitle } from "@/components/page-title";
 import { ModuleNav } from "@/components/module-nav";
 import { reportsNav } from "@/lib/nav";
 import { useRoleBase } from "@/lib/role";
-import { useAppSelector } from "@/lib/hooks";
+import { useRequestsQuery } from "@/features/api";
 import {
   Table,
   TableBody,
@@ -15,8 +15,11 @@ import {
 import { Card, CardContent } from "@/components/ui/card";
 
 export function IssueRequestsReport() {
-  const { role, base } = useRoleBase();
-  const requests = useAppSelector((s) => s.transactions.requests);
+  const ctx = useRoleBase();
+  const { data } = useRequestsQuery();
+  const requests = data?.requests ?? [];
+  if (ctx.loading || !ctx.role) return null;
+  const { role, base } = ctx;
   return (
     <>
       <PageTitle title="Issue Requests" backHref={`${base}/reports`} />

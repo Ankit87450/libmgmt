@@ -8,7 +8,11 @@ import { PageTitle } from "@/components/page-title";
 import { ModuleNav } from "@/components/module-nav";
 import { transactionsNav } from "@/lib/nav";
 import { useRoleBase } from "@/lib/role";
-import { useAppDispatch, useAppSelector } from "@/lib/hooks";
+import {
+  useItemsQuery,
+  useIssuesQuery,
+  useMarkReturnMutation,
+} from "@/features/api";
 import {
   Form,
   FormControl,
@@ -30,16 +34,16 @@ import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent } from "@/components/ui/card";
 import { DatePicker } from "@/components/date-picker";
 import { returnSchema, type ReturnValues } from "@/schemas/return";
-import { updateIssueOnReturn } from "@/features/transactions/transactionsSlice";
-import { computeFine } from "@/lib/fine";
 
 export function ReturnPage() {
   const router = useRouter();
-  const { role, base } = useRoleBase();
-  const dispatch = useAppDispatch();
-  const issues = useAppSelector((s) => s.transactions.issues);
-  const items = useAppSelector((s) => s.catalog.items);
+  const roleCtx = useRoleBase();
+  const { data: issuesData } = useIssuesQuery();
+  const { data: itemsData } = useItemsQuery();
+  const [markReturn, { isLoading }] = useMarkReturnMutation();
 
+  const issues = issuesData?.issues ?? [];
+  const items = itemsData?.items ?? [];
   const activeIssues = useMemo(
     () => issues.filter((i) => i.status === "Active"),
     [issues],
@@ -78,25 +82,20 @@ export function ReturnPage() {
     form.setValue("returnDate", issue.returnDueDate);
   }, [watchIssueId, issues, items, form]);
 
-  const onSubmit = (v: ReturnValues) => {
-    const fine = computeFine(v.issueDate, v.returnDate);
-    // We keep the original due date intact — fine is computed against it, not
-    // the editable returnDate. Per the chart though, the "Return Date" field on
-    // this screen is the ACTUAL return date after editing, so we use it as the
-    // actual-return-date, and base fine on dueDate vs actual-return.
-    const issue = issues.find((i) => i.id === v.issueId);
-    const dueDate = issue?.returnDueDate ?? v.returnDate;
-    const correctedFine = computeFine(dueDate, v.returnDate);
-    dispatch(
-      updateIssueOnReturn({
-        id: v.issueId,
-        actualReturnDate: v.returnDate,
-        remarks: v.remarks,
-        fineCalculated: correctedFine,
-      }),
-    );
+  if (roleCtx.loading || !roleCtx.role) return null;
+  const { role, base } = roleCtx;
+
+  const onSubmit = async (v: ReturnValues) => {
+    const res = await markReturn({
+      id: v.issueId,
+      actualReturnDate: v.returnDate,
+      remarks: v.remarks,
+    });
+    if ("error" in res) {
+      form.setError("issueId", { message: "Failed to mark return" });
+      return;
+    }
     router.push(`${base}/transactions/pay-fine?id=${v.issueId}`);
-    void fine;
   };
 
   return (
@@ -116,10 +115,7 @@ export function ReturnPage() {
                 render={({ field }) => (
                   <FormItem className="md:col-span-2">
                     <FormLabel>Active Issue</FormLabel>
-                    <Select
-                      onValueChange={field.onChange}
-                      value={field.value}
-                    >
+                    <Select onValueChange={field.onChange} value={field.value}>
                       <FormControl>
                         <SelectTrigger>
                           <SelectValue placeholder="Pick an active issue" />
@@ -238,7 +234,9 @@ export function ReturnPage() {
                 >
                   Cancel
                 </Button>
-                <Button type="submit">Confirm</Button>
+                <Button type="submit" disabled={isLoading}>
+                  {isLoading ? "Saving…" : "Confirm"}
+                </Button>
               </div>
             </form>
           </Form>

@@ -7,7 +7,9 @@ import { transactionsNav } from "@/lib/nav";
 import { useRoleBase } from "@/lib/role";
 
 export function TransactionsHub() {
-  const { role, base } = useRoleBase();
+  const ctx = useRoleBase();
+  if (ctx.loading || !ctx.role) return null;
+  const { role, base } = ctx;
   return (
     <>
       <PageTitle title="Transactions" backHref={`${base}/home`} />

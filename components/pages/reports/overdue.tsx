@@ -4,7 +4,11 @@ import { PageTitle } from "@/components/page-title";
 import { ModuleNav } from "@/components/module-nav";
 import { reportsNav } from "@/lib/nav";
 import { useRoleBase } from "@/lib/role";
-import { useAppSelector } from "@/lib/hooks";
+import {
+  useItemsQuery,
+  useIssuesQuery,
+  useSettingsQuery,
+} from "@/features/api";
 import {
   Table,
   TableBody,
@@ -14,18 +18,23 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Card, CardContent } from "@/components/ui/card";
-import { FINE_PER_DAY } from "@/lib/fine";
 
 export function OverdueReport() {
-  const { role, base } = useRoleBase();
+  const ctx = useRoleBase();
+  const { data: issuesData } = useIssuesQuery();
+  const { data: itemsData } = useItemsQuery();
+  const { data: settingsData } = useSettingsQuery();
+  const issues = issuesData?.issues ?? [];
+  const items = itemsData?.items ?? [];
+  const finePerDay = settingsData?.settings.finePerDay ?? 10;
   const today = new Date();
-  const issues = useAppSelector((s) => s.transactions.issues);
-  const items = useAppSelector((s) => s.catalog.items);
   const overdue = issues
     .filter((i) => i.status === "Active")
     .filter(
       (i) => differenceInCalendarDays(today, new Date(i.returnDueDate)) > 0,
     );
+  if (ctx.loading || !ctx.role) return null;
+  const { role, base } = ctx;
   return (
     <>
       <PageTitle title="Overdue Returns" backHref={`${base}/reports`} />
@@ -69,7 +78,7 @@ export function OverdueReport() {
                       <TableCell>{i.returnDueDate}</TableCell>
                       <TableCell className="text-right">{days}</TableCell>
                       <TableCell className="text-right">
-                        {days * FINE_PER_DAY}
+                        {days * finePerDay}
                       </TableCell>
                     </TableRow>
                   );

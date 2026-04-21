@@ -1,5 +1,6 @@
-import type { Role } from "@/features/auth/authSlice";
 import type { ModuleNavItem } from "@/components/module-nav";
+
+export type Role = "admin" | "user";
 
 export function transactionsNav(role: Role): ModuleNavItem[] {
   const base = role === "admin" ? "/admin" : "/user";

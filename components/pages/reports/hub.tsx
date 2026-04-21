@@ -7,7 +7,9 @@ import { reportsNav } from "@/lib/nav";
 import { useRoleBase } from "@/lib/role";
 
 export function ReportsHub() {
-  const { role, base } = useRoleBase();
+  const ctx = useRoleBase();
+  if (ctx.loading || !ctx.role) return null;
+  const { role, base } = ctx;
   return (
     <>
       <PageTitle title="Reports" backHref={`${base}/home`} />
