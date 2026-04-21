@@ -2,22 +2,35 @@
 
 Full-stack demo Library Management System built with **Next.js 16** (App
 Router), **shadcn/ui**, **Redux Toolkit (RTK Query)**, **React Hook Form**, and
-**Zod**. State is persisted server-side to a **single JSON file**
-(`data/db.json`). Session-cookie auth; server-side route protection via Next
-middleware.
+**Zod**. State is persisted to **Postgres (Supabase)** as a single JSONB row,
+so deployment works on Vercel serverless. Session-cookie auth; server-side
+route protection via Next middleware.
 
 ## Quick start
 
 ```bash
 npm install
-npm run dev        # http://localhost:3000
+cp .env.example .env   # then fill in DATABASE_URL
+npm run dev            # http://localhost:3000
 npm run build
 npm run typecheck
 ```
 
-First run: the server auto-creates `data/db.json` with seed data. To reset,
-stop the dev server, delete that file, and start again (or hit `DELETE /api/db`
-as admin).
+First run creates a `libmgmt_state` table in your Postgres database and seeds
+it with one JSONB row. To reset, hit `DELETE /api/db` as an admin, or
+`TRUNCATE libmgmt_state;` and restart.
+
+### Supabase notes
+
+- Copy the connection string from **Dashboard → Project Settings → Database →
+  Connection string → URI** (or the pooler one if direct is IPv6-only on your
+  plan).
+- **URL-encode any special characters** in the password. `$` → `%24`, `@` →
+  `%40`, `:` → `%3A`, etc. Without this, Next.js's env-file parser expands
+  sequences like `$1` and `pg`'s URI parser misreads the delimiters.
+- If you can't reset the DB password, use the **explicit fields** form in
+  `lib/server/pool.ts` instead of a connection string — that skips URL parsing
+  entirely.
 
 ## Demo credentials
 

@@ -18,7 +18,7 @@ export async function POST(req: Request) {
       { status: 400 },
     );
   }
-  const db = readDb();
+  const db = await readDb();
   const wantAdmin = role === "admin";
   const match = db.users.find(
     (u) =>

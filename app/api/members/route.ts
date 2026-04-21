@@ -11,7 +11,7 @@ function months(d: MembershipDuration): number {
 export async function GET() {
   const auth = await requireSession();
   if (!auth.ok) return auth.response;
-  const db = readDb();
+  const db = await readDb();
   return NextResponse.json({ members: db.members });
 }
 

@@ -1,5 +1,3 @@
-import fs from "node:fs";
-import path from "node:path";
 import { randomUUID } from "node:crypto";
 import {
   seedAppUsers,
@@ -15,6 +13,7 @@ import type {
   Item,
   Member,
 } from "@/lib/types";
+import { pool } from "./pool";
 
 export type Session = { token: string; userId: string; createdAt: number };
 
@@ -31,19 +30,6 @@ export type DbShape = {
   sessions: Session[];
 };
 
-// On read-only filesystems (Vercel, AWS Lambda) only /tmp is writable.
-// `LMS_DB_DIR` lets you override for other platforms.
-function resolveDataDir(): string {
-  if (process.env.LMS_DB_DIR) return process.env.LMS_DB_DIR;
-  if (process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME) {
-    return "/tmp/libmgmt";
-  }
-  return path.join(process.cwd(), "data");
-}
-
-const DATA_DIR = resolveDataDir();
-const DB_PATH = path.join(DATA_DIR, "db.json");
-
 function seedDb(): DbShape {
   return {
     version: 1,
@@ -57,36 +43,68 @@ function seedDb(): DbShape {
   };
 }
 
-function ensureFile(): void {
-  if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
-  if (!fs.existsSync(DB_PATH)) {
-    fs.writeFileSync(DB_PATH, JSON.stringify(seedDb(), null, 2), "utf8");
-  }
+const SCHEMA_SQL = `
+CREATE TABLE IF NOT EXISTS libmgmt_state (
+  id    INT PRIMARY KEY,
+  data  JSONB NOT NULL
+);
+`;
+
+async function ensureSchema(): Promise<void> {
+  if (globalThis.__lmsSchemaReady) return globalThis.__lmsSchemaReady;
+  globalThis.__lmsSchemaReady = (async () => {
+    await pool.query(SCHEMA_SQL);
+    const { rows } = await pool.query(
+      "SELECT 1 FROM libmgmt_state WHERE id = 1",
+    );
+    if (rows.length === 0) {
+      await pool.query(
+        "INSERT INTO libmgmt_state (id, data) VALUES (1, $1) ON CONFLICT (id) DO NOTHING",
+        [seedDb()],
+      );
+    }
+  })().catch((err) => {
+    // Allow retry on next call if schema init failed.
+    globalThis.__lmsSchemaReady = undefined;
+    throw err;
+  });
+  return globalThis.__lmsSchemaReady;
 }
 
-// Simple in-process serialization — sufficient for single-node dev server.
-let writeChain: Promise<void> = Promise.resolve();
-
-export function readDb(): DbShape {
-  ensureFile();
-  const raw = fs.readFileSync(DB_PATH, "utf8");
-  return JSON.parse(raw) as DbShape;
+export async function readDb(): Promise<DbShape> {
+  await ensureSchema();
+  const { rows } = await pool.query<{ data: DbShape }>(
+    "SELECT data FROM libmgmt_state WHERE id = 1",
+  );
+  return rows[0].data;
 }
 
-export function writeDb(db: DbShape): void {
-  ensureFile();
-  fs.writeFileSync(DB_PATH, JSON.stringify(db, null, 2), "utf8");
+export async function writeDb(db: DbShape): Promise<void> {
+  await ensureSchema();
+  await pool.query("UPDATE libmgmt_state SET data = $1 WHERE id = 1", [db]);
 }
 
 export async function mutate<T>(fn: (db: DbShape) => T): Promise<T> {
-  let result!: T;
-  writeChain = writeChain.then(() => {
-    const db = readDb();
-    result = fn(db);
-    writeDb(db);
-  });
-  await writeChain;
-  return result;
+  await ensureSchema();
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    const { rows } = await client.query<{ data: DbShape }>(
+      "SELECT data FROM libmgmt_state WHERE id = 1 FOR UPDATE",
+    );
+    const db = rows[0].data;
+    const result = fn(db);
+    await client.query("UPDATE libmgmt_state SET data = $1 WHERE id = 1", [
+      db,
+    ]);
+    await client.query("COMMIT");
+    return result;
+  } catch (err) {
+    await client.query("ROLLBACK").catch(() => undefined);
+    throw err;
+  } finally {
+    client.release();
+  }
 }
 
 export function nextId(prefix: string, existing: string[]): string {
@@ -106,6 +124,9 @@ export function newSessionToken(): string {
   return randomUUID();
 }
 
-export function resetDb(): void {
-  writeDb(seedDb());
+export async function resetDb(): Promise<void> {
+  await ensureSchema();
+  await pool.query("UPDATE libmgmt_state SET data = $1 WHERE id = 1", [
+    seedDb(),
+  ]);
 }

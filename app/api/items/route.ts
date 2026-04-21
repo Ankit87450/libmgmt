@@ -7,7 +7,7 @@ import type { Category, ItemKind } from "@/lib/types";
 export async function GET() {
   const auth = await requireSession();
   if (!auth.ok) return auth.response;
-  const db = readDb();
+  const db = await readDb();
   return NextResponse.json({ items: db.items });
 }
 

@@ -29,9 +29,11 @@ export async function destroySession(token: string): Promise<void> {
   });
 }
 
-export function lookupSession(token: string): SessionUser | null {
+export async function lookupSession(
+  token: string,
+): Promise<SessionUser | null> {
   if (!token) return null;
-  const db = readDb();
+  const db = await readDb();
   const session = db.sessions.find((s) => s.token === token);
   if (!session) return null;
   if (Date.now() - session.createdAt > SESSION_TTL_MS) return null;
