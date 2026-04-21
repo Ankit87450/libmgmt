@@ -126,6 +126,22 @@ screenshots.
 | Update Book/Movie     | kind radio; status + status-change date; procurement date is read-only            |
 | User Add / Update     | mode radio (default new); Name required; Active + Admin checkboxes                |
 
+## Deployment
+
+| Platform                           | Works?                                | Notes |
+|------------------------------------|---------------------------------------|-------|
+| `npm run dev` / `npm start` (any VPS, Railway, Render, Fly.io) | ✅ fully persistent | `data/db.json` lives with the app. |
+| **Vercel serverless**              | ⚠️ works, but **data doesn't persist** | Falls back to `/tmp/libmgmt/db.json`. Each cold start **re-seeds** and different function instances see different `/tmp`. Fine for a demo; unusable for real use. |
+| AWS Lambda                         | same as Vercel                        | same caveat — `/tmp` is per-invocation. |
+| Cloudflare Workers / Edge runtimes | ❌                                    | No `fs` access at all. |
+
+Override the data directory with `LMS_DB_DIR=/path/to/dir` if neither default
+fits.
+
+If you want real persistence on Vercel, swap `lib/server/db.ts` to a Vercel KV
+/ Upstash Redis / Postgres-backed implementation — the `readDb` / `mutate`
+signatures stay the same so no route handlers need to change.
+
 ## Known caveats / out of scope
 
 1. Fine rate defaults to **₹10/day** but is stored in `db.settings.finePerDay`
@@ -133,7 +149,8 @@ screenshots.
 2. Passwords are stored in plain text in `db.json` — fine for a local demo,
    unacceptable for production.
 3. The write serialization is in-process. If you run multiple Node processes
-   (e.g. PM2 cluster), writes can race. Use a real DB for that.
+   (e.g. PM2 cluster or Vercel serverless with concurrent instances), writes
+   race. Use a real DB for that.
 4. The "Chart" page is a textual summary rather than a rendered flow diagram.
 5. No pagination/sorting/search on reports.
 6. No 404/500 styled pages beyond Next.js defaults.

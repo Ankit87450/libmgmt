@@ -31,7 +31,17 @@ export type DbShape = {
   sessions: Session[];
 };
 
-const DATA_DIR = path.join(process.cwd(), "data");
+// On read-only filesystems (Vercel, AWS Lambda) only /tmp is writable.
+// `LMS_DB_DIR` lets you override for other platforms.
+function resolveDataDir(): string {
+  if (process.env.LMS_DB_DIR) return process.env.LMS_DB_DIR;
+  if (process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME) {
+    return "/tmp/libmgmt";
+  }
+  return path.join(process.cwd(), "data");
+}
+
+const DATA_DIR = resolveDataDir();
 const DB_PATH = path.join(DATA_DIR, "db.json");
 
 function seedDb(): DbShape {
